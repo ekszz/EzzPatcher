@@ -1,0 +1,40 @@
+classPatchDefine: # 固定值
+  # 需要修改的类名
+  com.example.ezjava.controller.EvilController:
+      # 需要修改的第1个方法名
+      # 该类下所有需要修改的方法组成一个List
+    - method: cmd
+      # 该方法的参数列表（可选），List结构
+      # 如果为空，应为paramType: []
+      # 若无该参数，默认取同名函数中的某一个
+      paramType:
+        - java.lang.String
+      # 可选，目前支持：
+      # overwrite 覆盖（默认）
+      # insertBefore 在原方法前插入代码
+      # insertAfter 在原方法返回前插入代码
+      # insertAt 在指定行数插入代码
+      mode: overwrite
+      # 你的代码
+      code: '{ return "ok";}'
+
+      # 需要修改的第2个方法名
+    - method: cmd
+      paramType: []
+      mode: insertAt
+      # 在该行数前插入代码
+      # 当mode为insertAt时，此参数为必选
+      insertAt: 23
+      code: '{System.out.println("helloworld");return "yes!";}'
+  
+  # 需要修改的第2个类，这是一个最简单的配置的示例
+  com.example.ezjava.beans.TargetClass:
+    - method: getFlag
+      code: 'return "ok";'
+  
+  com.example.ezjava.controller.DownloadController:
+    - method: readFileCode
+      paramType:
+        - java.lang.String
+      mode: insertBefore
+      code: '{filePath="/tmp/nothing.txt";}'
