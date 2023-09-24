@@ -6,6 +6,7 @@
 ![GitHub top language](https://img.shields.io/github/languages/top/ekszz/EzzPatcher)
 ![GitHub release (with filter)](https://img.shields.io/github/v/release/ekszz/EzzPatcher)
 
+<img src="https://socialify.git.ci/ekszz/EzzPatcher/image?description=1&font=Jost&issues=1&language=1&name=1&owner=1&pattern=Signal&stargazers=1&theme=Auto" alt="EzzPatcher" width="50%" />
 
 一款Java运行态字节码插桩工具。可以通过配置，在不重启应用的情况下，动态更新运行中的JVM里的字节码。
 
