@@ -58,6 +58,9 @@ public class Config implements Serializable {
      * @return parameter map
      */
     public Map<String, Object> readFromLocalYAML(String path) throws FileNotFoundException {
+        if ("restore".equalsIgnoreCase(path)) {
+            path = "Y2xhc3NQYXRjaERlZmluZToNCg==";
+        }
         BufferedReader br = null;
         try {
             // try as a base64 string first

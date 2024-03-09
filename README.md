@@ -148,6 +148,12 @@ classPatchDefine:
 java -jar EzzPatcher-1.x.x-jar-with-dependencies.jar <java-pid> Y2xhc3NQYXRjaERlZmluZToNCg==
 ```
 
+你也可以用一个更简单的语法糖，它与上面的命令行等效：
+
+```
+java -jar EzzPatcher-1.x.x-jar-with-dependencies.jar <java-pid> restore
+```
+
 ## 0x04 一些注意
 
 Javaagent在被JVM加载之后，agent的相关类无法被卸载/更新，虽然一般没太大影响，但请谨慎使用。
