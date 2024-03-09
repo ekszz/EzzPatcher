@@ -10,8 +10,8 @@ import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
 import java.security.MessageDigest;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
 
 public class EzzPatcher {
     private static volatile String hashLoaded = null;
@@ -25,17 +25,16 @@ public class EzzPatcher {
         if (agentArgs != null && !agentArgs.isEmpty()) {
             configFilePath = agentArgs;
         }
-        Log.LEVEL = Level.CONFIG;
-        printWelcome();
-        reload(configFilePath);
-        loadTransformer(inst);
+        if (reload(configFilePath)) {
+            loadTransformer(inst);
+        }
     }
 
     public static void agentmain(String agentArgs, Instrumentation inst) {
-        Log.LEVEL = Level.CONFIG;
-        printWelcome();
-        loadTransformer(inst);
-        retransform(agentArgs, inst);
+        if (reload(agentArgs)) {
+            loadTransformer(inst);
+            retransform(inst);
+        }
     }
 
     private static void loadTransformer(Instrumentation inst) {
@@ -44,7 +43,7 @@ public class EzzPatcher {
             inst.addTransformer(transformer, true);
             Log.info("[+] EzzPatcher load success. Self HASH: {}.", hashLoaded);
         } else {
-            Log.info("[*] EzzPatcher is already loaded, reload config now ...");
+            Log.info("[*] EzzPatcher is already loaded, try re-patch class ...");
             if (!hashLoaded.equals(getSelfMd5())) {
                 Log.warn("[-] The current EzzPatcher in target JVM is inconsistent with the one running now," +
                         " which is dangerous! JVM HASH: {}.", hashLoaded);
@@ -79,12 +78,22 @@ public class EzzPatcher {
     private static boolean reload(String path) {
         ConcurrentHashMap<String, List<ClassMethodDefine>> x = null;
         try {
-            x = config.loadFromLocalYAML(path);
+            Map<String, Object> yamlData = config.readFromLocalYAML(path);
+            boolean isReload = config.reloadConfig(yamlData);
+            printWelcome();
+            if (!isReload) {
+                Log.debug("[*] Keep config is ON, config will not be refreshed.");
+            } else {
+                Log.fromString(config.getConfig().get(Config.CONF_KEY_LOG_LEVEL));
+            }
+            x = config.getClassMethodDefine(yamlData);
         } catch (FileNotFoundException e) {
+            printWelcome();
             Log.error("[-] Config yaml not found at {}.", path);
         } catch (Throwable e) {
+            printWelcome();
             Log.error("[-] Config yaml file format error.");
-            Log.error(e.getMessage());
+            Log.debug(e);
         }
         if (x != null) {
             config.setClassPatchDefine(x);
@@ -93,31 +102,31 @@ public class EzzPatcher {
         return false;
     }
 
-    private static synchronized void retransform(String path, Instrumentation inst) {
-        if (reload(path)) {
-            for (Class<?> c : inst.getAllLoadedClasses()) {
-                String className = c.getName().replace(".", "/");
-                if (config.getClassPatchDefine().containsKey(className)) {
-                    try {
-                        Log.debug("[*] Retransform class: {}", c.getName());
-                        inst.retransformClasses(c);
-                    } catch (UnmodifiableClassException e) {
-                        Log.warn("[-] Failed to retransform class: {}", c.getName());
-                        Log.warn(e);
-                    }
+    private static synchronized void retransform(Instrumentation inst) {
+        for (Class<?> c : inst.getAllLoadedClasses()) {
+            String className = c.getName().replace(".", "/");
+            if (config.getClassPatchDefine().containsKey(className)) {
+                try {
+                    Log.debug("[*] Retransform class: {}", c.getName());
+                    inst.retransformClasses(c);
+                } catch (UnmodifiableClassException e) {
+                    Log.warn("[-] Failed to retransform class: {}", c.getName());
+                    Log.warn(e);
                 }
             }
         }
     }
 
     private static void printWelcome() {
-        System.out.println(Log.cyan("    ______          ____        __       __             \n" +
-                "   / ____/_______  / __ \\____ _/ /______/ /_  ___  _____\n" +
-                "  / __/ /_  /_  / / /_/ / __ `/ __/ ___/ __ \\/ _ \\/ ___/\n" +
-                " / /___  / /_/ /_/ ____/ /_/ / /_/ /__/ / / /  __/ /    \n" +
-                "/_____/ /___/___/_/    \\__,_/\\__/\\___/_/ /_/\\___/_/     \n" +
-                "                                                {v1.0.0}"));
-        System.out.println();
+        if ("false".equals(config.getConfig().get(Config.CONF_KEY_NO_LOGO))) {
+            System.out.println(Log.cyan("    ______          ____        __       __             \n" +
+                    "   / ____/_______  / __ \\____ _/ /______/ /_  ___  _____\n" +
+                    "  / __/ /_  /_  / / /_/ / __ `/ __/ ___/ __ \\/ _ \\/ ___/\n" +
+                    " / /___  / /_/ /_/ ____/ /_/ / /_/ /__/ / / /  __/ /    \n" +
+                    "/_____/ /___/___/_/    \\__,_/\\__/\\___/_/ /_/\\___/_/     \n" +
+                    "                                                {v1.1.0}"));
+            System.out.println();
+        }
     }
 
     private static void printHelp() {

@@ -1,3 +1,8 @@
+config:
+  keepConfig: FALSE # 是否保留上一次的配置。除第一次外，只有出现该配置且为FALSE时，才更新config部分配置
+  noLogo: FALSE # 是否不显示LOGO，默认FALSE
+  logLevel: INFO # 日志级别，支持DEBUG/INFO/WARNING/ERROR/NONE，默认INFO
+
 classPatchDefine: # 固定值
   # 需要修改的类名
   com.example.ezjava.controller.EvilController:

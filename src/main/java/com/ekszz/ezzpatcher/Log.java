@@ -246,4 +246,25 @@ public class Log {
     private static boolean canLog(Level level) {
         return level.intValue() >= LEVEL.intValue();
     }
+
+    public static void fromString(String level) {
+        switch (level) {
+            case "DEBUG":
+                LEVEL = Level.FINER;
+                break;
+            case "INFO":
+                LEVEL = Level.CONFIG;
+                break;
+            case "WARNING":
+                LEVEL = Level.WARNING;
+                break;
+            case "ERROR":
+                LEVEL = Level.SEVERE;
+                break;
+            case "NONE":
+                LEVEL = Level.OFF;
+                break;
+            default:
+        }
+    }
 }
