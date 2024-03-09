@@ -10,7 +10,7 @@
 
 一款Java运行态字节码插桩工具。可以通过配置，在不重启应用的情况下，动态更新运行中的JVM里的字节码。
 
-初衷是用于CTF比赛AWD模式下Java应用的快速修补，当然，它绝不局限于此。
+初衷是用于CTF比赛AWD模式下Java应用的安全漏洞的快速修补，也可用于在不停服的情况下，修复JAVA应用的一些安全漏洞。当然，它绝不局限于此。
 
 - 基于JavaAgent
 - 支持随应用启动和应用启动后attach两种模式
@@ -80,7 +80,12 @@ java -cp <class-path> -javaagent:EzzPatcher-1.x.x-jar-with-dependencies.jar=<pat
 > 如果在启动命令行中不带<path-to-config>参数的话，默认使用目标JVM工作目录下的config.yml文件。建议使用绝对路径指定。
 
 ```yaml
-classPatchDefine: # 固定值
+config: # 全局配置
+  keepConfig: FALSE # 是否保留上一次的配置。除第一次外，只有出现该配置且为FALSE时，才更新config部分配置
+  noLogo: FALSE # 是否不显示LOGO，默认FALSE
+  logLevel: INFO # 日志级别，支持DEBUG/INFO/WARNING/ERROR/NONE，默认INFO
+
+classPatchDefine: # 需要patch的信息
   # 需要修改的类名
   com.example.ezjava.controller.EvilController:
       # 需要修改的第1个方法名
