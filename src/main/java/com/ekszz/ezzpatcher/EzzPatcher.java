@@ -1,13 +1,12 @@
 package com.ekszz.ezzpatcher;
 
-import com.sun.tools.attach.VirtualMachine;
-import com.sun.tools.attach.VirtualMachineDescriptor;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
+import java.net.URL;
+import java.net.URLClassLoader;
 import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
@@ -139,6 +138,38 @@ public class EzzPatcher {
         System.out.println();
     }
 
+    public static Class<?> getVirtualMachineClass() {
+        Class<?> virtualMachineClass = null;
+        try {
+            virtualMachineClass = Class.forName("com.sun.tools.attach.VirtualMachine");
+        } catch (ClassNotFoundException e) {
+            String javaHome = System.getenv().get("JAVA_HOME");
+            File javaHomeFile = null;
+            if (javaHome != null) {
+                javaHomeFile = new File(javaHome);
+            } else {
+                javaHomeFile = new File(System.getProperty("java.home"));
+            }
+            File toolsJar = new File(javaHomeFile + File.separator + "lib" + File.separator, "tools.jar");
+            if (!toolsJar.exists())
+                toolsJar = new File(javaHomeFile.getParentFile() + File.separator + "lib" + File.separator, "tools.jar");
+            if (!toolsJar.exists())
+                toolsJar = new File(javaHomeFile.getParentFile().getParentFile() + File.separator + "lib" + File.separator, "tools.jar");
+            if (!toolsJar.exists()) {
+                return null;
+            }
+
+            try {
+                URL[] urls = {toolsJar.toURI().toURL()};
+                virtualMachineClass = (new URLClassLoader(urls)).loadClass("com.sun.tools.attach.VirtualMachine");
+            } catch (Exception ex) {
+                System.out.println(Log.red("Load tools.jar fail: " + ex.getMessage()));
+                ex.printStackTrace();
+            }
+        }
+        return virtualMachineClass;
+    }
+
     public static void main(String[] args) {
         if (args == null || args.length != 1 && args.length != 2) {
             printHelp();
@@ -147,28 +178,45 @@ public class EzzPatcher {
 
         printWelcome();
         String configFilePath = args.length == 1 ? "config.yml" : args[1];
-        List<VirtualMachineDescriptor> list = VirtualMachine.list();
+
+        Class<?> virtualMachineClass = getVirtualMachineClass();
+        if (virtualMachineClass == null) {
+            System.out.println(Log.red("tools.jar not found."));
+            System.out.println(Log.red("Try to add -Xbootclasspath/a:<path-to-jdk>/lib/tools.jar to cmd line."));
+            System.out.println(Log.red("Example:\n    java -Xbootclasspath/a:<path-to-jdk>/lib/tools.jar -jar EzzPatcher.jar pid CONFIGFILE_PATH"));
+            System.out.println();
+            return;
+        }
+
         boolean found = false;
-        for (VirtualMachineDescriptor vmd : list) {
-            if (vmd.id().equals(args[0])) {
-                found = true;
-                try {
-                    System.out.println(Log.green("JVM: ") + vmd.displayName());
-                    VirtualMachine virtualMachine = VirtualMachine.attach(vmd.id());
-                    String path = new File(EzzPatcher.class.getProtectionDomain().getCodeSource().getLocation()
-                            .getPath()).getAbsolutePath();
-                    System.out.println(Log.yellow("JAR: ") + path);
-                    System.out.println();
-                    virtualMachine.loadAgent(path, configFilePath);
-                    virtualMachine.detach();
-                    System.out.println(Log.cyan("Completed."));
-                    System.out.println(Log.cyan("Logs will be printed in the target JVM."));
-                    System.out.println(Log.cyan("Good luck !!!"));
-                    System.out.println();
-                } catch (Exception e) {
-                    e.printStackTrace();
+        try {
+            List<?> list = (List<?>) virtualMachineClass.getDeclaredMethod("list").invoke(null, new Object[0]);
+            for (Object vmd : list) {
+                Class<?> descriptorClass = vmd.getClass();
+                String pid = (String) descriptorClass.getMethod("id").invoke(vmd, new Object[0]);
+                String displayName = (String) descriptorClass.getMethod("displayName").invoke(vmd, new Object[0]);
+                if (pid.equals(args[0])) {
+                    found = true;
+                    try {
+                        System.out.println(Log.green("JVM: ") + displayName);
+                        Object virtualMachine = virtualMachineClass.getDeclaredMethod("attach", String.class).invoke(null, pid);
+                        String path = new File(EzzPatcher.class.getProtectionDomain().getCodeSource().getLocation()
+                                .getPath()).getAbsolutePath();
+                        System.out.println(Log.yellow("JAR: ") + path);
+                        System.out.println();
+                        virtualMachineClass.getDeclaredMethod("loadAgent", String.class, String.class).invoke(virtualMachine, path, configFilePath);
+                        virtualMachine.getClass().getDeclaredMethod("detach").invoke(virtualMachine);
+                        System.out.println(Log.cyan("Completed."));
+                        System.out.println(Log.cyan("Logs will be printed in the target JVM."));
+                        System.out.println(Log.cyan("Good luck !!!"));
+                        System.out.println();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
             }
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
         if (!found) {
             System.out.println(Log.red("JVM not found. pid = " + args[0] + "."));

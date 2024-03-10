@@ -40,7 +40,16 @@ mvn clean package
 
 每次执行时，会还原上次的修改，并根据最新的配置文件，重新对目标JVM中的类进行热补丁。
 
-**JDK 8**
+```
+java -jar EzzPatcher-1.x.x-jar-with-dependencies.jar <java-pid>
+```
+or
+```
+java -jar EzzPatcher-1.x.x-jar-with-dependencies.jar <java-pid> <path-to-config>
+```
+
+如果你使用JDK 8，且提示无法找到tools.jar，则你可以使用-Xbootclasspath/a指定tools.jar的位置。
+
 ```
 java -Xbootclasspath/a:<path-to-jdk>/lib/tools.jar -jar EzzPatcher-1.x.x-jar-with-dependencies.jar <java-pid>
 ```
@@ -49,14 +58,6 @@ or
 java -Xbootclasspath/a:<path-to-jdk>/lib/tools.jar -jar EzzPatcher-1.x.x-jar-with-dependencies.jar <java-pid> <path-to-config>
 ```
 
-**JDK 11 and newer**
-```
-java -jar EzzPatcher-1.x.x-jar-with-dependencies.jar <java-pid>
-```
-or
-```
-java -jar EzzPatcher-1.x.x-jar-with-dependencies.jar <java-pid> <path-to-config>
-```
 
 ### 通过-javaagent参数随目标JVM启动
 
