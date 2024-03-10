@@ -1,10 +1,13 @@
 package com.ekszz.ezzpatcher;
 
+import sun.misc.Unsafe;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.lang.instrument.Instrumentation;
 import java.lang.instrument.UnmodifiableClassException;
+import java.lang.reflect.Field;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.security.MessageDigest;
@@ -162,12 +165,25 @@ public class EzzPatcher {
             try {
                 URL[] urls = {toolsJar.toURI().toURL()};
                 virtualMachineClass = (new URLClassLoader(urls)).loadClass("com.sun.tools.attach.VirtualMachine");
-            } catch (Exception ex) {
+            } catch (Throwable ex) {
                 System.out.println(Log.red("Load tools.jar fail: " + ex.getMessage()));
                 ex.printStackTrace();
             }
         }
         return virtualMachineClass;
+    }
+
+    public static void disableWarning() {
+        try {
+            Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+            theUnsafe.setAccessible(true);
+            Unsafe u = (Unsafe) theUnsafe.get(null);
+
+            Class<?> cls = Class.forName("jdk.internal.module.IllegalAccessLogger");
+            Field logger = cls.getDeclaredField("logger");
+            u.putObjectVolatile(cls, u.staticFieldOffset(logger), null);
+        } catch (Exception ignored) {
+        }
     }
 
     public static void main(String[] args) {
@@ -179,6 +195,7 @@ public class EzzPatcher {
         printWelcome();
         String configFilePath = args.length == 1 ? "config.yml" : args[1];
 
+        disableWarning();
         Class<?> virtualMachineClass = getVirtualMachineClass();
         if (virtualMachineClass == null) {
             System.out.println(Log.red("tools.jar not found."));
