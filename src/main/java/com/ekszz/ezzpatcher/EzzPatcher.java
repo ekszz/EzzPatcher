@@ -5,12 +5,17 @@ import sun.misc.Unsafe;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.lang.instrument.Instrumentation;
-import java.lang.instrument.UnmodifiableClassException;
 import java.lang.reflect.Field;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -111,7 +116,7 @@ public class EzzPatcher {
                 try {
                     Log.debug("[*] Retransform class: {}", c.getName());
                     inst.retransformClasses(c);
-                } catch (UnmodifiableClassException e) {
+                } catch (Exception e) {
                     Log.warn("[-] Failed to retransform class: {}", c.getName());
                     Log.warn(e);
                 }
@@ -126,7 +131,7 @@ public class EzzPatcher {
                     "  / __/ /_  /_  / / /_/ / __ `/ __/ ___/ __ \\/ _ \\/ ___/\n" +
                     " / /___  / /_/ /_/ ____/ /_/ / /_/ /__/ / / /  __/ /    \n" +
                     "/_____/ /___/___/_/    \\__,_/\\__/\\___/_/ /_/\\___/_/     \n" +
-                    "                                                {v1.1.0}"));
+                    "                                                {v1.2.0}"));
             System.out.println();
         }
     }
@@ -134,10 +139,16 @@ public class EzzPatcher {
     private static void printHelp() {
         printWelcome();
         System.out.println("Usage:");
-        System.out.println("    java -Xbootclasspath/a:<path-to-jdk>/lib/tools.jar -jar EzzPatcher.jar pid");
+        System.out.println("    java -jar EzzPatcher.jar pid");
         System.out.println("        Use default local config file ./config.yml");
-        System.out.println("    java -Xbootclasspath/a:<path-to-jdk>/lib/tools.jar -jar EzzPatcher.jar pid CONFIGFILE_PATH");
-        System.out.println("        Use local config file CONFIGFILE_PATH, like /tmp/config.yml");
+        System.out.println("    java -jar EzzPatcher.jar pid CONFIG_FILE_PATH");
+        System.out.println("        Use local config file CONFIG_FILE_PATH, like /tmp/config.yml");
+        System.out.println();
+        System.out.println("Useful gadgets:");
+        System.out.println("    java -jar EzzPatcher.jar jps");
+        System.out.println("        List JVM processes.");
+        System.out.println("    java -jar EzzPatcher.jar b64 [FILE_PATH]");
+        System.out.println("        Encode a file using base64, ./config.yml is default.");
         System.out.println();
     }
 
@@ -192,52 +203,88 @@ public class EzzPatcher {
             return;
         }
 
-        printWelcome();
-        String configFilePath = args.length == 1 ? "config.yml" : args[1];
-
-        disableWarning();
-        Class<?> virtualMachineClass = getVirtualMachineClass();
-        if (virtualMachineClass == null) {
-            System.out.println(Log.red("tools.jar not found."));
-            System.out.println(Log.red("Try to add -Xbootclasspath/a:<path-to-jdk>/lib/tools.jar to cmd line."));
-            System.out.println(Log.red("Example:\n    java -Xbootclasspath/a:<path-to-jdk>/lib/tools.jar -jar EzzPatcher.jar pid CONFIGFILE_PATH"));
-            System.out.println();
-            return;
-        }
-
-        boolean found = false;
-        try {
-            List<?> list = (List<?>) virtualMachineClass.getDeclaredMethod("list").invoke(null, new Object[0]);
-            for (Object vmd : list) {
-                Class<?> descriptorClass = vmd.getClass();
-                String pid = (String) descriptorClass.getMethod("id").invoke(vmd, new Object[0]);
-                String displayName = (String) descriptorClass.getMethod("displayName").invoke(vmd, new Object[0]);
-                if (pid.equals(args[0])) {
-                    found = true;
-                    try {
-                        System.out.println(Log.green("JVM: ") + displayName);
-                        Object virtualMachine = virtualMachineClass.getDeclaredMethod("attach", String.class).invoke(null, pid);
-                        String path = new File(EzzPatcher.class.getProtectionDomain().getCodeSource().getLocation()
-                                .getPath()).getAbsolutePath();
-                        System.out.println(Log.yellow("JAR: ") + path);
-                        System.out.println();
-                        virtualMachineClass.getDeclaredMethod("loadAgent", String.class, String.class).invoke(virtualMachine, path, configFilePath);
-                        virtualMachine.getClass().getDeclaredMethod("detach").invoke(virtualMachine);
-                        System.out.println(Log.cyan("Completed."));
-                        System.out.println(Log.cyan("Logs will be printed in the target JVM."));
-                        System.out.println(Log.cyan("Good luck !!!"));
-                        System.out.println();
-                    } catch (Exception e) {
-                        e.printStackTrace();
+        if ("jps".equalsIgnoreCase(args[0])) {
+            // list vm processes
+            Class<?> virtualMachineClass = getVirtualMachineClass();
+            if (virtualMachineClass == null) {
+                System.out.println(Log.red("tools.jar not found."));
+                System.out.println(Log.red("Try to add -Xbootclasspath/a:<path-to-jdk>/lib/tools.jar to cmd line."));
+                System.out.println(Log.red("Example:\n    java -Xbootclasspath/a:<path-to-jdk>/lib/tools.jar -jar EzzPatcher.jar jps"));
+                System.out.println();
+            } else {
+                try {
+                    List<?> list = (List<?>) virtualMachineClass.getDeclaredMethod("list").invoke(null, new Object[0]);
+                    for (Object vmd : list) {
+                        Class<?> descriptorClass = vmd.getClass();
+                        String pid = (String) descriptorClass.getMethod("id").invoke(vmd, new Object[0]);
+                        String displayName = (String) descriptorClass.getMethod("displayName").invoke(vmd, new Object[0]);
+                        System.out.println(pid + " " + displayName);
                     }
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
             }
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-        if (!found) {
-            System.out.println(Log.red("JVM not found. pid = " + args[0] + "."));
-            System.out.println();
+        } else if ("b64".equalsIgnoreCase(args[0])) {
+            // base64 config file
+            String configFilePath = args.length == 1 ? "config.yml" : args[1];
+            Path path = Paths.get(configFilePath);
+            try {
+                byte[] bytes = Files.readAllBytes(path);
+                System.out.println(Base64.getEncoder().encodeToString(bytes));
+            } catch (NoSuchFileException e) {
+                System.out.println("ERROR: File not found: " + path);
+            } catch (IOException e) {
+                System.out.println("ERROR: " + e.getMessage());
+            }
+        } else {
+            // main branch
+            printWelcome();
+            String configFilePath = args.length == 1 ? "config.yml" : args[1];
+
+            disableWarning();
+            Class<?> virtualMachineClass = getVirtualMachineClass();
+            if (virtualMachineClass == null) {
+                System.out.println(Log.red("tools.jar not found."));
+                System.out.println(Log.red("Try to add -Xbootclasspath/a:<path-to-jdk>/lib/tools.jar to cmd line."));
+                System.out.println(Log.red("Example:\n    java -Xbootclasspath/a:<path-to-jdk>/lib/tools.jar -jar EzzPatcher.jar pid CONFIGFILE_PATH"));
+                System.out.println();
+                return;
+            }
+
+            boolean found = false;
+            try {
+                List<?> list = (List<?>) virtualMachineClass.getDeclaredMethod("list").invoke(null, new Object[0]);
+                for (Object vmd : list) {
+                    Class<?> descriptorClass = vmd.getClass();
+                    String pid = (String) descriptorClass.getMethod("id").invoke(vmd, new Object[0]);
+                    String displayName = (String) descriptorClass.getMethod("displayName").invoke(vmd, new Object[0]);
+                    if (pid.equals(args[0])) {
+                        found = true;
+                        try {
+                            System.out.println(Log.green("JVM: ") + displayName);
+                            Object virtualMachine = virtualMachineClass.getDeclaredMethod("attach", String.class).invoke(null, pid);
+                            String path = new File(EzzPatcher.class.getProtectionDomain().getCodeSource().getLocation()
+                                    .getPath()).getAbsolutePath();
+                            System.out.println(Log.yellow("JAR: ") + path);
+                            System.out.println();
+                            virtualMachineClass.getDeclaredMethod("loadAgent", String.class, String.class).invoke(virtualMachine, path, configFilePath);
+                            virtualMachine.getClass().getDeclaredMethod("detach").invoke(virtualMachine);
+                            System.out.println(Log.cyan("Completed."));
+                            System.out.println(Log.cyan("Logs will be printed in the target JVM."));
+                            System.out.println(Log.cyan("Good luck !!!"));
+                            System.out.println();
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+            if (!found) {
+                System.out.println(Log.red("JVM not found. pid = " + args[0] + "."));
+                System.out.println();
+            }
         }
     }
 }
