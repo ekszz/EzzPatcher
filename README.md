@@ -126,6 +126,10 @@ classPatchDefine: # 需要patch的信息
         - java.lang.String
       mode: insertBefore
       code: '{filePath="/tmp/nothing.txt";}'
+
+  # 直接替换整个类，值是.class文件的base64编码
+  # 注意，你不能改变类的签名或者增减方法、变更方法名（可以使用javap -p A.class查看类中的方法）
+  com.example.ezjava.controller.TestController: yv66vgAAADQDYwoA4...
 ```
 
 > 注意：
@@ -143,7 +147,7 @@ classPatchDefine:
 
 你可以将配置文件内容Base64编码后，放在<path-to-config>参数位置，以实现配置文件不落地。
 
-例如，你要还原所有变更的话，在JDK11下，可以执行：
+例如，你要还原所有变更的话，可以执行：
 
 ```
 java -jar EzzPatcher-1.x.x-jar-with-dependencies.jar <java-pid> Y2xhc3NQYXRjaERlZmluZToNCg==
@@ -155,13 +159,33 @@ java -jar EzzPatcher-1.x.x-jar-with-dependencies.jar <java-pid> Y2xhc3NQYXRjaERl
 java -jar EzzPatcher-1.x.x-jar-with-dependencies.jar <java-pid> restore
 ```
 
-## 0x04 一些注意
+## 0x04 一些有用的辅助工具
+
+### Base64编码一个文件
+
+```
+java -jar EzzPatcher-1.x.x-jar-with-dependencies.jar b64 <path-to-file>
+```
+
+你也可以省略<path-to-file>参数，则默认会编码当前目录下的config.yml文件：
+
+```
+java -jar EzzPatcher-1.x.x-jar-with-dependencies.jar b64
+```
+
+### 显示当前用户下正在运行的JVM进程（类似jps）
+
+```
+java -jar EzzPatcher-1.x.x-jar-with-dependencies.jar jps
+```
+
+## 0x05 一些注意
 
 Javaagent在被JVM加载之后，agent的相关类无法被卸载/更新，虽然一般没太大影响，但请谨慎使用。
 
 仅在JDK8和JDK11上测试过。
 
-## 0x05 免责声明
+## 0x06 免责声明
 
 本项目仅面向软件研发调试、研究、学习，禁止任何非法用途。
 
