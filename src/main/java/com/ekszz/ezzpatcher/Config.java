@@ -14,6 +14,12 @@ public class Config implements Serializable {
     final public static String CONF_KEY_KEEP_CONFIG = "keepConfig";
     final public static String CONF_KEY_NO_LOGO = "noLogo";
     final public static String CONF_KEY_LOG_LEVEL = "logLevel";
+
+    final public static String CONF_KEY_DUMP_FILTER_TYPE = "filterType";
+    final public static String CONF_KEY_DUMP_FILTER_VALUE = "filter";
+    final public static String CONF_KEY_DUMP_SAVE_PATH = "savePath";
+    final public static String CONF_KEY_DUMP_SKIP_JDK = "skipJDK";
+
     final public static List<String> ALLOW_LOG_LEVEL = Arrays.asList("DEBUG", "INFO", "WARNING", "ERROR", "NONE");
 
     final public static List<ClassMethodDefine> NULL_DEFINE = new ArrayList<>();
@@ -28,6 +34,13 @@ public class Config implements Serializable {
      * if value is NULL_DEFINE, then this class needs to be restored
      */
     private ConcurrentHashMap<String, List<ClassMethodDefine>> classPatchDefine = new ConcurrentHashMap<>();
+
+    private ConcurrentHashMap<String, String> classDumpDefine = new ConcurrentHashMap<String, String>() {{
+        put(CONF_KEY_DUMP_FILTER_TYPE, "none");
+        put(CONF_KEY_DUMP_FILTER_VALUE, "");
+        put(CONF_KEY_DUMP_SAVE_PATH, "/tmp");
+        put(CONF_KEY_DUMP_SKIP_JDK, "true");
+    }};
 
     private ConcurrentHashMap<String, byte[]> backupCode = new ConcurrentHashMap<>();
 
@@ -49,6 +62,14 @@ public class Config implements Serializable {
 
     public void setConfig(ConcurrentHashMap<String, String> config) {
         this.config = config;
+    }
+
+    public ConcurrentHashMap<String, String> getClassDumpDefine() {
+        return classDumpDefine;
+    }
+
+    public void setClassDumpDefine(ConcurrentHashMap<String, String> classDumpDefine) {
+        this.classDumpDefine = classDumpDefine;
     }
 
     /**
@@ -193,6 +214,42 @@ public class Config implements Serializable {
             }
         }
         return newClassPatchDefine;
+    }
+
+    /**
+     * get ClassDumpDefine result from yaml map
+     *
+     * @param yamlData yaml map
+     * @return new dump config
+     */
+    public ConcurrentHashMap<String, String> getClassDumpDefine(Map<String, Object> yamlData) {
+        ConcurrentHashMap<String, String> newClassDumpDefine = new ConcurrentHashMap<String, String>() {{
+            put(CONF_KEY_DUMP_FILTER_TYPE, "none");
+            put(CONF_KEY_DUMP_FILTER_VALUE, "");
+            put(CONF_KEY_DUMP_SAVE_PATH, "/tmp");
+            put(CONF_KEY_DUMP_SKIP_JDK, "true");
+        }};
+        if (yamlData.containsKey("classDumpDefine") && yamlData.get("classDumpDefine") instanceof Map) {
+            Map<String, ?> yamlClassDumpDefine = (Map<String, ?>) yamlData.get("classDumpDefine");
+            for (Map.Entry<String, ?> entry : yamlClassDumpDefine.entrySet()) {
+                if (CONF_KEY_DUMP_FILTER_TYPE.equals(entry.getKey()) && entry.getValue() instanceof String) {
+                    if ("none".equals(entry.getValue()) || "prefix".equals(entry.getValue()) || "regex".equals(entry.getValue())) {
+                        newClassDumpDefine.put(CONF_KEY_DUMP_FILTER_TYPE, (String) entry.getValue());
+                    }
+                } else if (CONF_KEY_DUMP_FILTER_VALUE.equals(entry.getKey()) && entry.getValue() instanceof String) {
+                    newClassDumpDefine.put(CONF_KEY_DUMP_FILTER_VALUE, (String) entry.getValue());
+                } else if (CONF_KEY_DUMP_SAVE_PATH.equals(entry.getKey()) && entry.getValue() instanceof String) {
+                    if (!((String) entry.getValue()).isEmpty()) {
+                        newClassDumpDefine.put(CONF_KEY_DUMP_SAVE_PATH, (String) entry.getValue());
+                    }
+                } else if (CONF_KEY_DUMP_SKIP_JDK.equals(entry.getKey()) && entry.getValue() instanceof Boolean) {
+                    if (!((Boolean) entry.getValue())) {
+                        newClassDumpDefine.put(CONF_KEY_DUMP_SKIP_JDK, "false");
+                    }
+                }
+            }
+        }
+        return newClassDumpDefine;
     }
 
     /**

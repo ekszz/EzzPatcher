@@ -1,7 +1,23 @@
 config:
-  keepConfig: FALSE # 是否保留上一次的配置。除第一次外，只有出现该配置且为FALSE时，才更新config部分配置
-  noLogo: FALSE # 是否不显示LOGO，默认FALSE
-  logLevel: INFO # 日志级别，支持DEBUG/INFO/WARNING/ERROR/NONE，默认INFO
+  # 是否保留上一次的配置。除第一次外，只有出现该配置且为FALSE时，才更新config部分配置
+  keepConfig: FALSE
+  # 是否不显示LOGO，默认FALSE
+  noLogo: FALSE
+  # 日志级别，支持DEBUG/INFO/WARNING/ERROR/NONE，默认INFO
+  logLevel: INFO
+
+classDumpDefine: # 固定值
+  # 导出时类名过滤的方式
+  # none 不导出类（关闭该功能）
+  # prefix 根据前缀导出
+  # regex 根据正则表达式导出
+  filterType: prefix
+  # 过滤表达式
+  filter: com.example
+  # 导出类保存的目录
+  savePath: /tmp
+  # 跳过JDK中的类（强烈建议为TRUE）
+  skipJDK: TRUE
 
 classPatchDefine: # 固定值
   # 需要修改的类名
@@ -43,3 +59,7 @@ classPatchDefine: # 固定值
         - java.lang.String
       mode: insertBefore
       code: '{filePath="/tmp/nothing.txt";}'
+
+  # 直接替换整个类，值是.class文件的base64编码
+  # 注意，你不能改变类的签名或者增减方法、变更方法名（可以使用javap -p A.class查看类中的方法）
+  com.example.ezjava.controller.TestController: yv66vgAAADQDYwoA4...

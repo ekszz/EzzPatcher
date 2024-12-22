@@ -2,12 +2,19 @@ package com.ekszz.ezzpatcher;
 
 import javassist.*;
 
+import java.io.File;
 import java.lang.instrument.ClassFileTransformer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class EzzTransformer implements ClassFileTransformer {
     private Config config;
@@ -19,8 +26,47 @@ public class EzzTransformer implements ClassFileTransformer {
     @Override
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
+        String dotClassName = className.replace("/", ".");
+        if (!"none".equals(config.getClassDumpDefine().get(Config.CONF_KEY_DUMP_FILTER_TYPE))) {
+            if ("false".equals(config.getClassDumpDefine().get(Config.CONF_KEY_DUMP_SKIP_JDK))
+                    || !dotClassName.startsWith("sun.") && !dotClassName.startsWith("java.")
+                    && !dotClassName.startsWith("javax.") && !dotClassName.startsWith("jdk.")
+                    && !dotClassName.startsWith("com.sun.")) {
+                boolean needToDump = false;
+                String filterValue = config.getClassDumpDefine().get(Config.CONF_KEY_DUMP_FILTER_VALUE);
+                if ("regex".equals(config.getClassDumpDefine().get(Config.CONF_KEY_DUMP_FILTER_TYPE))) {
+                    Pattern pattern = Pattern.compile(filterValue);
+                    Matcher m = pattern.matcher(dotClassName);
+                    if (m.matches()) {
+                        needToDump = true;
+                    }
+                } else if ("prefix".equals(config.getClassDumpDefine().get(Config.CONF_KEY_DUMP_FILTER_TYPE))) {
+                    if (dotClassName.startsWith(filterValue)) {
+                        needToDump = true;
+                    }
+                }
+                if (needToDump) {
+                    Log.debug("[*] Trying to dump class: {}", dotClassName);
+                    String fullPath = config.getClassDumpDefine().get(Config.CONF_KEY_DUMP_SAVE_PATH);
+                    Path filePath = Paths.get(fullPath + (fullPath.endsWith(File.separator) ? "" : File.separator) + className + ".class");
+                    if (Files.exists(filePath)) {
+                        Log.info("[-] Class dump file already exist: {}, skip.", className + ".class");
+                    } else {
+                        byte[] classBytes = config.getBackupCode().getOrDefault(className, classfileBuffer);
+                        try {
+                            Files.createDirectories(filePath.getParent());
+                            Files.write(filePath, classBytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
+                            Log.info("[+] Dump class success: {}", dotClassName);
+                        } catch (Throwable e) {
+                            Log.warn("[-] Dump class fail: {}.", dotClassName);
+                            Log.warn(e);
+                        }
+                    }
+                }
+            }
+        }
+
         if (config.getClassPatchDefine().containsKey(className)) {
-            String dotClassName = className.replace("/", ".");
             List<ClassMethodDefine> classMethodDefineList = config.getClassPatchDefine().get(className);
             if (classMethodDefineList == Config.NULL_DEFINE) {
                 // restore class

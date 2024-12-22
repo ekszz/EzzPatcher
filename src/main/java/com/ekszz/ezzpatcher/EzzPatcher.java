@@ -16,9 +16,12 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class EzzPatcher {
     private static volatile String hashLoaded = null;
@@ -84,6 +87,7 @@ public class EzzPatcher {
 
     private static boolean reload(String path) {
         ConcurrentHashMap<String, List<ClassMethodDefine>> x = null;
+        ConcurrentHashMap<String, String> y = null;
         try {
             Map<String, Object> yamlData = config.readFromLocalYAML(path);
             boolean isReload = config.reloadConfig(yamlData);
@@ -94,6 +98,7 @@ public class EzzPatcher {
                 Log.fromString(config.getConfig().get(Config.CONF_KEY_LOG_LEVEL));
             }
             x = config.getClassMethodDefine(yamlData);
+            y = config.getClassDumpDefine(yamlData);
         } catch (FileNotFoundException e) {
             printWelcome();
             Log.error("[-] Config yaml not found at {}.", path);
@@ -104,20 +109,56 @@ public class EzzPatcher {
         }
         if (x != null) {
             config.setClassPatchDefine(x);
-            return true;
         }
-        return false;
+        if (y != null) {
+            config.setClassDumpDefine(y);
+        }
+        return x != null || y != null;
     }
 
     private static synchronized void retransform(Instrumentation inst) {
-        for (Class<?> c : inst.getAllLoadedClasses()) {
+        Class<?>[] x = inst.getAllLoadedClasses();
+        // Because the same class loaded by different classloaders will appear repeatedly in inst.getAllLoadedClasses,
+        // so the qualified class name is used to remove duplicates.
+        Map<String, Class<?>> needToRetransform = new HashMap<>();
+        for (Class<?> c : x) {
             String className = c.getName().replace(".", "/");
             if (config.getClassPatchDefine().containsKey(className)) {
+                needToRetransform.putIfAbsent(c.getName(), c);
+            }
+        }
+        if (!"none".equals(config.getClassDumpDefine().get(Config.CONF_KEY_DUMP_FILTER_TYPE))) {
+            String filterValue = config.getClassDumpDefine().get(Config.CONF_KEY_DUMP_FILTER_VALUE);
+            Pattern pattern = null;
+            if ("regex".equals(config.getClassDumpDefine().get(Config.CONF_KEY_DUMP_FILTER_TYPE))) {
+                pattern = Pattern.compile(filterValue);
+            }
+            for (Class<?> c : x) {
+                if ("false".equals(config.getClassDumpDefine().get(Config.CONF_KEY_DUMP_SKIP_JDK))
+                        || !c.getName().startsWith("sun.") && !c.getName().startsWith("java.")
+                        && !c.getName().startsWith("javax.") && !c.getName().startsWith("jdk.")
+                        && !c.getName().startsWith("com.sun.")) {
+                    if ("regex".equals(config.getClassDumpDefine().get(Config.CONF_KEY_DUMP_FILTER_TYPE))) {
+                        Matcher m = pattern.matcher(c.getName());
+                        if (m.matches()) {
+                            needToRetransform.putIfAbsent(c.getName(), c);
+                        }
+                    } else if ("prefix".equals(config.getClassDumpDefine().get(Config.CONF_KEY_DUMP_FILTER_TYPE))) {
+                        if (c.getName().startsWith(filterValue)) {
+                            needToRetransform.putIfAbsent(c.getName(), c);
+                        }
+                    }
+                }
+            }
+        }
+
+        for (Map.Entry<String, Class<?>> entry : needToRetransform.entrySet()) {
+            if (inst.isModifiableClass(entry.getValue())) {
                 try {
-                    Log.debug("[*] Retransform class: {}", c.getName());
-                    inst.retransformClasses(c);
-                } catch (Exception e) {
-                    Log.warn("[-] Failed to retransform class: {}", c.getName());
+                    Log.debug("[*] Start to process class: {}", entry.getKey());
+                    inst.retransformClasses(entry.getValue());
+                } catch (Throwable e) {
+                    Log.warn("[-] Failed to process class: {}", entry.getKey());
                     Log.warn(e);
                 }
             }
@@ -131,7 +172,7 @@ public class EzzPatcher {
                     "  / __/ /_  /_  / / /_/ / __ `/ __/ ___/ __ \\/ _ \\/ ___/\n" +
                     " / /___  / /_/ /_/ ____/ /_/ / /_/ /__/ / / /  __/ /    \n" +
                     "/_____/ /___/___/_/    \\__,_/\\__/\\___/_/ /_/\\___/_/     \n" +
-                    "                                                {v1.2.0}"));
+                    "                                                {v1.3.0}"));
             System.out.println();
         }
     }
