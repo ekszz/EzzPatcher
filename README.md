@@ -17,6 +17,7 @@
 - 使用Yaml文件简便配置
 - 支持不重启应用的情况下多次patch
 - 支持已patch类的还原
+- 支持JVM中类字节码导出
 - 支持配置文件不落地
 
 
@@ -82,9 +83,25 @@ java -cp <class-path> -javaagent:EzzPatcher-1.x.x-jar-with-dependencies.jar=<pat
 
 ```yaml
 config: # 全局配置
-  keepConfig: FALSE # 是否保留上一次的配置。除第一次外，只有出现该配置且为FALSE时，才更新config部分配置
-  noLogo: FALSE # 是否不显示LOGO，默认FALSE
-  logLevel: INFO # 日志级别，支持DEBUG/INFO/WARNING/ERROR/NONE，默认INFO
+  # 是否保留上一次的配置。除第一次外，只有出现该配置且为FALSE时，才更新config部分配置
+  keepConfig: FALSE
+  # 是否不显示LOGO，默认FALSE
+  noLogo: FALSE
+  # 日志级别，支持DEBUG/INFO/WARNING/ERROR/NONE，默认INFO
+  logLevel: INFO
+
+classDumpDefine: # 导出类功能配置（可能会影响性能或导致问题）
+  # 导出时类名过滤的方式
+  # none 不导出类（关闭该功能）
+  # prefix 根据前缀导出
+  # regex 根据正则表达式导出
+  filterType: prefix
+  # 过滤表达式
+  filter: com.example
+  # 导出类保存的目录
+  savePath: /tmp
+  # 跳过JDK中的类（强烈建议为TRUE）
+  skipJDK: TRUE
 
 classPatchDefine: # 需要patch的信息
   # 需要修改的类名
@@ -135,14 +152,14 @@ classPatchDefine: # 需要patch的信息
 > 注意：
 > 
 > 1. code字段中的代码应满足Javassist要求。
-> 
 > 2. Javassist中有一些特别的参数约定，如$0代表this，$1、$2...等代表第1、2...个参数，具体可参见Javassist文档。
+> 3. 在使用整个类的字节码进行替换时，你不能改变类的签名或者增减方法、变更方法名（可以使用javap -p A.class查看类中的方法）。
+> 4. 使用类导出功能可能会影响宿主JVM的性能和稳定性，建议仅导出需要的个别类。
 
 如果你要还原所有变更，直接放置一个如下的配置文件后再次运行即可：
 
 ```yaml
 classPatchDefine:
-
 ```
 
 你可以将配置文件内容Base64编码后，放在<path-to-config>参数位置，以实现配置文件不落地。
